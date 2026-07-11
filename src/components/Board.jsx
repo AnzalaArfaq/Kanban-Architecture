@@ -7,10 +7,10 @@ const Board = ({ columns, updateColumnTitle, deleteColumn, addTask, updateTask, 
     <div className="board-layout">
       {columns.map((col, index) => (
         <Column 
-          key={col.id} 
-          column={col} 
-          isFirst={index === 0}
+          key={col.id}
+          column={col}
           isLast={index === columns.length - 1}
+          isFirst={index === 0}
           updateColumnTitle={updateColumnTitle}
           deleteColumn={deleteColumn}
           addTask={addTask}

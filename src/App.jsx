@@ -1,116 +1,131 @@
-/* eslint-disable no-unused-vars */
-import React, { useState, useEffect } from "react";
-import Board from "./components/Board";
+import { useState, useEffect } from "react";
 import "./index.css";
+import Board from "./components/Board";
 
-const generateUniqueId = () => Date.now().toString(36) + Math.random().toString(36).substring(2);
+const generateUniqueId = () =>
+  Date.now().toString(36) + Math.random().toString(36).substring(2);
 
 function App() {
-  // Data Hydration from localStorage
   const [columns, setColumns] = useState(() => {
     const savedData = localStorage.getItem("kanban_srs_state");
-    return savedData ? JSON.parse(savedData) : [
-      { id: "col-1", title: "To Do", tasks: [] },
-      { id: "col-2", title: "In Progress", tasks: [] },
-      { id: "col-3", title: "Done", tasks: [] }
-    ];
+    return savedData
+      ? JSON.parse(savedData)
+      : [
+          { id: generateUniqueId(), title: "Todo", tasks: [] },
+          { id: generateUniqueId(), title: "In Progress", tasks: [] },
+          { id: generateUniqueId(), title: "Complete", tasks: [] },
+        ];
   });
 
-  // Data Persistence
   useEffect(() => {
     localStorage.setItem("kanban_srs_state", JSON.stringify(columns));
   }, [columns]);
 
-  // --- COLUMN MANAGEMENT ---
+  // Column Related Functions {add, delete, modify/edit}
   const addColumn = () => {
     const newCol = { id: generateUniqueId(), title: "New Column", tasks: [] };
     setColumns([...columns, newCol]);
   };
 
-  const updateColumnTitle = (colId, newTitle) => {
-    setColumns(columns.map(c => c.id === colId ? { ...c, title: newTitle } : c));
+  const delColumn = (colId) => {
+    setColumns(columns.filter((c) => colId !== c.id));
   };
 
-  const deleteColumn = (colId) => {
-    setColumns(columns.filter(c => c.id !== colId));
+  const updateColumn = (colId, newTitle) => {
+    setColumns(
+      columns.map((c) => (c.id === colId ? { ...c, title: newTitle } : c))
+    );
   };
 
-  // --- TASK MANAGEMENT ---
+  // Task Related Functions {add, update, delete, move}
   const addTask = (colId, taskText) => {
     const newTask = {
-      id: generateUniqueId(),
-      text: taskText,
+      id: generateUniqueId(), // FIX: Invoked function
+      text: taskText, // FIX: Changed 'name' to 'text' to match TaskCard
       timeSpentSeconds: 0,
-      isTimerRunning: false
+      isTimerRunning: false,
+      status: "pending", // FIX: Typo from "panding"
     };
-    setColumns(columns.map(c => {
-      if (c.id === colId) return { ...c, tasks: [...c.tasks, newTask] };
-      return c;
-    }));
+    
+    setColumns((prevCols) =>
+      prevCols.map((c) =>
+        c.id === colId ? { ...c, tasks: [...c.tasks, newTask] } : c
+      )
+    ); // FIX: Returned updated state properly, used 'tasks' instead of 'task'
+  };
+
+  const delTask = (colId, taskId) => {
+    setColumns((prevCols) =>
+      prevCols.map((c) =>
+        c.id === colId ? { ...c, tasks: c.tasks.filter((t) => t.id !== taskId) } : c
+      )
+    );
   };
 
   const updateTask = (colId, taskId, updates) => {
-    setColumns(columns.map(c => {
-      if (c.id === colId) {
-        return {
-          ...c,
-          tasks: c.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
-        };
-      }
-      return c;
-    }));
+    setColumns((prevCols) =>
+      prevCols.map((c) =>
+        c.id === colId
+          ? {
+              ...c,
+              tasks: c.tasks.map((t) =>
+                t.id === taskId ? { ...t, ...updates } : t // FIX: Correctly spread ...t
+              ),
+            }
+          : c
+      )
+    );
   };
 
-  const deleteTask = (colId, taskId) => {
-    setColumns(columns.map(c => {
-      if (c.id === colId) {
-        return { ...c, tasks: c.tasks.filter(t => t.id !== taskId) };
-      }
-      return c;
-    }));
-  };
+  // FIX: Aligned signature to match TaskCard: (colId, taskId, direction)
+  const movTask = (colId, taskId, direction) => {
+    setColumns((prevCols) => {
+      const sourceIndex = prevCols.findIndex((c) => c.id === colId);
+      const targetIndex = sourceIndex + direction; // FIX: + direction fixes the math
 
-  const moveTask = (sourceColId, taskId, direction) => {
-    const sourceColIndex = columns.findIndex(c => c.id === sourceColId);
-    const targetColIndex = sourceColIndex + direction; // -1 for left, +1 for right
+      if (targetIndex < 0 || targetIndex >= prevCols.length) return prevCols;
 
-    if (targetColIndex < 0 || targetColIndex >= columns.length) return;
+      let taskToMove = null;
 
-    let taskToMove = null;
-    
-    // Remove from source
-    const updatedSourceTasks = columns[sourceColIndex].tasks.filter(t => {
-      if (t.id === taskId) {
-        taskToMove = t;
-        return false;
-      }
-      return true;
+      // Extract the task from the source column
+      const updatedSourceTasks = prevCols[sourceIndex].tasks.filter((t) => {
+        if (t.id === taskId) {
+          taskToMove = t;
+          return false;
+        }
+        return true;
+      });
+
+      if (!taskToMove) return prevCols;
+
+      // Create a fresh copy of columns to mutate immutably
+      const newCols = [...prevCols];
+      newCols[sourceIndex] = { ...newCols[sourceIndex], tasks: updatedSourceTasks };
+      newCols[targetIndex] = {
+        ...newCols[targetIndex],
+        tasks: [...newCols[targetIndex].tasks, taskToMove],
+      };
+
+      return newCols;
     });
-
-    if (!taskToMove) return;
-
-    // Build new columns array
-    const newColumns = [...columns];
-    newColumns[sourceColIndex] = { ...newColumns[sourceColIndex], tasks: updatedSourceTasks };
-    newColumns[targetColIndex] = { ...newColumns[targetColIndex], tasks: [...newColumns[targetColIndex].tasks, taskToMove] };
-
-    setColumns(newColumns);
   };
 
   return (
     <div className="app-container">
       <header className="app-header">
         <h1>SRS Kanban Architecture</h1>
-        <button className="btn primary" onClick={addColumn}>+ Add Column</button>
+        <button className="btn primary" onClick={addColumn}>
+          + Add Column
+        </button>
       </header>
       <Board 
         columns={columns}
-        updateColumnTitle={updateColumnTitle}
-        deleteColumn={deleteColumn}
+        updateColumnTitle={updateColumn}
+        deleteColumn={delColumn}
         addTask={addTask}
+        deleteTask={delTask}
+        moveTask={movTask}
         updateTask={updateTask}
-        deleteTask={deleteTask}
-        moveTask={moveTask}
       />
     </div>
   );
